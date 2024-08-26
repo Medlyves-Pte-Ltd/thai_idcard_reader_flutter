@@ -290,10 +290,12 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
             device= currDevice
           //Register the usbReceiver for the custom action
               context.registerReceiver(usbReceiver, IntentFilter(customAction))
+              
           //Create an intent with the custom action
               val intent = Intent(customAction).apply {
                   putExtra(UsbManager.EXTRA_DEVICE, currDevice)
               }
+
           //Send the custom broadcast
               context.sendBroadcast(intent)
           }
