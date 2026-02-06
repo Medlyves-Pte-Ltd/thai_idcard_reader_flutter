@@ -10,6 +10,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import androidx.annotation.NonNull
+import androidx.core.content.ContextCompat
 import com.acs.smartcard.Reader
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
@@ -30,6 +31,19 @@ val customAction = "com.example.thai_idcard_reader_flutter.ACTION_USB_ATTACHED"
 
 private fun pendingPermissionIntent(context: Context) =
     PendingIntent.getBroadcast(context, 0, Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+private fun Intent.getUsbDeviceExtra(): UsbDevice? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        getParcelableExtra(UsbManager.EXTRA_DEVICE)
+    }
+}
+
+private fun registerUsbReceiver(context: Context, receiver: BroadcastReceiver, filter: IntentFilter) {
+    ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+}
 
 /** ThaiIdcardReaderFlutterPlugin */
 class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
@@ -57,13 +71,13 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
           val action = intent.action
           val reader = mReader
           var dev: HashMap<String, Any?>?
-          device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+          device = intent.getUsbDeviceExtra()
           println("$action")
           println("$device")
           if (action == customAction) {
             if (usbManager!!.hasPermission(device)) {
               println("has permission")
-              context.registerReceiver(receiver, IntentFilter(ACTION_USB_ATTACHED))
+              registerUsbReceiver(context, receiver, IntentFilter(ACTION_USB_ATTACHED))
               dev = serializeDevice(device)
               reader?.open(device)
               dev["isAttached"] = true
@@ -75,7 +89,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
                 readerStreamHandler?.setReader(reader)
               }
             } else {
-              context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+              registerUsbReceiver(context, receiver, IntentFilter(ACTION_USB_PERMISSION))
               println("Inside permission")
               println("$device")
               if(device?.vendorId==1839){
@@ -95,7 +109,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
               dev["hasPermission"] = true
               eventSink?.success(dev)
             } else {
-              context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+              registerUsbReceiver(context, receiver, IntentFilter(ACTION_USB_PERMISSION))
               println("Inside permission")
               println("$device")
               if(device?.vendorId==1839){
@@ -154,7 +168,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
     filter.addAction(ACTION_USB_DETACHED)
     filter.addAction(ACTION_USB_ATTACHED)
     filter.addAction(customAction)
-    applicationContext!!.registerReceiver(usbReceiver, filter)
+    registerUsbReceiver(applicationContext!!, usbReceiver, filter)
     println("finish filtrer")
     this.eventSink = eventSink
   }
@@ -196,7 +210,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
     filter.addAction(ACTION_USB_DETACHED)
     filter.addAction(ACTION_USB_ATTACHED)
     filter.addAction(customAction)
-    applicationContext!!.registerReceiver(usbReceiver, filter)
+    registerUsbReceiver(applicationContext!!, usbReceiver, filter)
     println("finish filtrer")
   }
 
@@ -217,7 +231,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
           context.unregisterReceiver(this)
           println("connection intent")
           println("$intent")
-          val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+          val device = intent.getUsbDeviceExtra()
           val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
           println("$device")
           println("${device?.vendorId}")
@@ -263,7 +277,7 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
         val device = manager.deviceList[identifier]
         if(device?.vendorId==1839){
           if (!manager.hasPermission(device)) {
-          context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+          registerUsbReceiver(context, receiver, IntentFilter(ACTION_USB_PERMISSION))
           manager.requestPermission(device, pendingPermissionIntent(context))
         }
       }
@@ -283,13 +297,13 @@ class ThaiIdcardReaderFlutterPlugin : FlutterPlugin, MethodCallHandler, EventCha
             if(currDevice?.vendorId==1839){
               usbEventChannel?.setStreamHandler(this)              
                if (!manager.hasPermission(currDevice)) {
-              context.registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+              registerUsbReceiver(context, receiver, IntentFilter(ACTION_USB_PERMISSION))
               manager.requestPermission(currDevice, pendingPermissionIntent(context))
              }
             else{
             device= currDevice
           //Register the usbReceiver for the custom action
-              context.registerReceiver(usbReceiver, IntentFilter(customAction))
+              registerUsbReceiver(context, usbReceiver, IntentFilter(customAction))
           //Create an intent with the custom action
               val intent = Intent(customAction).apply {
                   putExtra(UsbManager.EXTRA_DEVICE, currDevice)
